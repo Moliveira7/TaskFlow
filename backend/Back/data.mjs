@@ -10,6 +10,16 @@ db.serialize(() => {
         email TEXT UNIQUE,
         password TEXT
     )`);
+
+    // Criar a tabela de tarefas se não existir
+    db.run(`CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        completed BOOLEAN NOT NULL DEFAULT 0,
+        user_email TEXT NOT NULL,
+        FOREIGN KEY (user_email) REFERENCES users (email) ON DELETE CASCADE
+    )`);
 });
 
 export default db;
