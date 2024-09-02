@@ -21,21 +21,17 @@ app.get('/', (req, res) => {
 app.post('/register', (req, res) => {
     const { email, password } = req.body;
 
-    // Verificar se email e password estão presentes
     if (!email || !password) {
         return res.status(400).json({ message: 'E-mail e senha são obrigatórios!' });
     }
 
-    // Verificar se o usuário já existe
     db.get('SELECT * FROM users WHERE email = ?', [email], (err, row) => {
         if (row) {
             return res.status(400).json({ message: 'Usuário já existe!' });
         }
 
-        // Criptografar a senha
         const hashedPassword = bcrypt.hashSync(password, 8);
 
-        // Inserir novo usuário
         db.run('INSERT INTO users (email, password) VALUES (?, ?)', [email, hashedPassword], function(err) {
             if (err) {
                 return res.status(500).json({ message: 'Erro ao cadastrar usuário!' });
@@ -90,19 +86,16 @@ app.post('/register-multiple', (req, res) => {
 app.post('/login', (req, res) => {
     const { email, password } = req.body;
 
-    // Verificar se o usuário existe
     db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
         if (!user) {
             return res.status(404).json({ message: 'Usuário não encontrado!' });
         }
 
-        // Verificar a senha
         const isPasswordValid = bcrypt.compareSync(password, user.password);
         if (!isPasswordValid) {
             return res.status(401).json({ accessToken: null, message: 'Senha inválida!' });
         }
 
-        // Criar um token JWT
         const token = jwt.sign({ email }, 'secret', { expiresIn: '1h' });
         res.status(200).json({ accessToken: token });
     });
@@ -138,12 +131,10 @@ function authenticateJWT(req, res, next) {
 app.post('/tasks', authenticateJWT, (req, res) => {
     const { title, description } = req.body;
 
-    // Verificar se título e descrição estão presentes
     if (!title || !description) {
         return res.status(400).json({ message: 'Título e descrição são obrigatórios!' });
     }
 
-    // Inserir nova tarefa no banco de dados
     db.run('INSERT INTO tasks (title, description, completed, user_email) VALUES (?, ?, ?, ?)', 
         [title, description, false, req.user.email], function(err) {
             if (err) {
@@ -154,14 +145,48 @@ app.post('/tasks', authenticateJWT, (req, res) => {
     );
 });
 
-// Endpoint para listar todas as tarefas do usuário
+// **Endpoint para listar todas as tarefas do usuário com paginação**
 app.get('/tasks', authenticateJWT, (req, res) => {
-    db.all('SELECT * FROM tasks WHERE user_email = ?', [req.user.email], (err, rows) => {
-        if (err) {
-            return res.status(500).json({ message: 'Erro ao listar tarefas!' });
+    const { page = 1, limit = 10 } = req.query;
+
+    // Validar os parâmetros de paginação
+    const validPage = parseInt(page);
+    const validLimit = parseInt(limit);
+
+    if (isNaN(validPage) || validPage < 1) {
+        return res.status(400).json({ message: 'Parâmetro "page" inválido!' });
+    }
+    if (isNaN(validLimit) || validLimit < 1) {
+        return res.status(400).json({ message: 'Parâmetro "limit" inválido!' });
+    }
+
+    const offset = (validPage - 1) * validLimit;
+
+    db.all(
+        'SELECT * FROM tasks WHERE user_email = ? LIMIT ? OFFSET ?',
+        [req.user.email, validLimit, offset],
+        (err, rows) => {
+            if (err) {
+                return res.status(500).json({ message: 'Erro ao listar tarefas!' });
+            }
+
+            db.get('SELECT COUNT(*) AS total FROM tasks WHERE user_email = ?', [req.user.email], (err, result) => {
+                if (err) {
+                    return res.status(500).json({ message: 'Erro ao contar tarefas!' });
+                }
+
+                const totalTasks = result.total;
+                const totalPages = Math.ceil(totalTasks / validLimit);
+
+                res.json({
+                    totalTasks,
+                    totalPages,
+                    currentPage: validPage,
+                    tasks: rows
+                });
+            });
         }
-        res.json(rows);
-    });
+    );
 });
 
 // Endpoint para editar uma tarefa
@@ -169,30 +194,46 @@ app.put('/tasks/:id', authenticateJWT, (req, res) => {
     const taskId = parseInt(req.params.id);
     const { title, description } = req.body;
 
-    // Verificar se título ou descrição estão presentes
-    if (!title && !description) {
-        return res.status(400).json({ message: 'Pelo menos um campo (título ou descrição) deve ser fornecido para atualização.' });
+    if (isNaN(taskId)) {
+        return res.status(400).json({ message: 'ID inválido!' });
     }
 
-    // Atualizar a tarefa no banco de dados
-    db.run('UPDATE tasks SET title = ?, description = ? WHERE id = ? AND user_email = ?', 
-        [title || null, description || null, taskId, req.user.email], function(err) {
-            if (err) {
-                return res.status(500).json({ message: 'Erro ao atualizar tarefa!' });
-            }
-            if (this.changes === 0) {
-                return res.status(404).json({ message: 'Tarefa não encontrada!' });
-            }
-            res.json({ message: "Tarefa atualizada com sucesso!" });
+    if ((title && typeof title !== 'string') || (description && typeof description !== 'string')) {
+        return res.status(400).json({ message: 'Título e descrição devem ser strings!' });
+    }
+
+    if (!title && !description) {
+        return res.status(400).json({ message: 'Nenhum campo para atualizar!' });
+    }
+
+    db.get('SELECT * FROM tasks WHERE id = ? AND user_email = ?', [taskId, req.user.email], (err, task) => {
+        if (err) {
+            return res.status(500).json({ message: 'Erro ao buscar tarefa!' });
         }
-    );
+
+        if (!task) {
+            return res.status(404).json({ message: 'Tarefa não encontrada!' });
+        }
+
+        db.run('UPDATE tasks SET title = ?, description = ? WHERE id = ?', 
+            [title || task.title, description || task.description, taskId], function(err) {
+                if (err) {
+                    return res.status(500).json({ message: 'Erro ao atualizar tarefa!' });
+                }
+
+                res.json({
+                    message: "Tarefa atualizada com sucesso!",
+                    task: { id: taskId, title: title || task.title, description: description || task.description }
+                });
+            }
+        );
+    });
 });
 
 // Endpoint para excluir uma tarefa
 app.delete('/tasks/:id', authenticateJWT, (req, res) => {
     const taskId = parseInt(req.params.id);
     
-    // Excluir a tarefa do banco de dados
     db.run('DELETE FROM tasks WHERE id = ? AND user_email = ?', [taskId, req.user.email], function(err) {
         if (err) {
             return res.status(500).json({ message: 'Erro ao excluir tarefa!' });
@@ -200,7 +241,6 @@ app.delete('/tasks/:id', authenticateJWT, (req, res) => {
         if (this.changes === 0) {
             return res.status(404).json({ message: 'Tarefa não encontrada!' });
         }
-        // Alterar para retornar 200 com uma mensagem de sucesso
         res.status(200).json({ message: 'Tarefa excluída com sucesso!' });
     });
 });
