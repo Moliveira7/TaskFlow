@@ -5,8 +5,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node Back/server.js",    
-    "dev": "nodemon Back/server.js",   
+    "start": "node src/server.js",    
+    "dev": "nodemon src/server.js",   
     "test": "jest"
   },
   "keywords": [],

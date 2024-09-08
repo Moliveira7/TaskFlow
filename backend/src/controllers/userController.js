@@ -28,14 +28,12 @@ export const registerUser = async (req, res) => {
         }
 
         // Criptografar senha
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // const hashedPassword = await bcrypt.hash(password, 10);
 
         // Inserir novo usuário no banco de dados
-        await createUser(email, hashedPassword);
+        await createUser(email, password);
 
-        // Gerar token JWT
-        const token = generateToken(email);
-        res.status(201).json({ token });
+        res.status(201).json({ message: 'Usuario Criado com sucesso' });
 
     } catch (error) {
         res.status(500).json({ message: 'Erro ao cadastrar usuário!', error: error.message });
