@@ -1,56 +1,55 @@
-import TaskModel from '../models/taskModel.js';
+import { 
+  createTask as createTaskModel, 
+  getTasksByUser as getTasksByUserModel, 
+  updateTask as updateTaskModel, 
+  deleteTask as deleteTaskModel 
+} from '../models/taskModel.js';
 
-// Criar nova tarefa
-export const createTask = async (req, res) => {
-  const { title, description } = req.body;
-
-  if (!title || !description) {
-    return res.status(400).json({ message: 'Título e descrição são obrigatórios!' });
-  }
-
+// Controlador para criar tarefa
+export const createTaskController = async (req, res) => {
+  const { title, description, user_email } = req.body;
   try {
-    const task = await TaskModel.createTask(title, description, req.user.email);
-    res.status(201).json({ task });
-  } catch (err) {
-    res.status(500).json({ message: 'Erro ao criar tarefa!' });
+    const task = await createTaskModel(title, description, user_email);
+    res.status(201).json(task);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao criar tarefa.' });
   }
 };
 
-// Listar tarefas
-export const listTasks = async (req, res) => {
+// Controlador para buscar tarefas do usuário
+export const getTasksByUserController = async (req, res) => {
+  const { user_email } = req.params;
   try {
-    const tasks = await TaskModel.getTasksByUser(req.user.email);
-    res.json(tasks);
-  } catch (err) {
-    res.status(500).json({ message: 'Erro ao listar tarefas!' });
+    const tasks = await getTasksByUserModel(user_email);
+    if (tasks.length === 0) {
+      return res.status(404).json({ message: 'Nenhuma tarefa encontrada para este usuário.' });
+    }
+    res.status(200).json(tasks);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao buscar tarefas.' });
   }
 };
 
-// Atualizar tarefa
-export const updateTask = async (req, res) => {
-  const { title, description } = req.body;
-  const taskId = parseInt(req.params.id);
-
-  if (!title && !description) {
-    return res.status(400).json({ message: 'Nenhum campo para atualizar!' });
-  }
-
+// Controlador para atualizar tarefa
+export const updateTaskController = async (req, res) => {
+  const { id } = req.params;
+  const { title, description, user_email } = req.body;
   try {
-    const updatedTask = await TaskModel.updateTask(taskId, title, description, req.user.email);
-    res.json({ task: updatedTask });
-  } catch (err) {
-    res.status(500).json({ message: 'Erro ao atualizar tarefa!' });
+    const task = await updateTaskModel(id, title, description, user_email);
+    res.status(200).json(task);
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao atualizar tarefa.' });
   }
 };
 
-// Excluir tarefa
-export const deleteTask = async (req, res) => {
-  const taskId = parseInt(req.params.id);
-
+// Controlador para excluir tarefa
+export const deleteTaskController = async (req, res) => {
+  const { id } = req.params;
+  const { user_email } = req.body;
   try {
-    await TaskModel.deleteTask(taskId, req.user.email);
-    res.status(200).json({ message: 'Tarefa excluída com sucesso!' });
-  } catch (err) {
-    res.status(500).json({ message: 'Erro ao excluir tarefa!' });
+    await deleteTaskModel(id, user_email);
+    res.status(204).send();
+  } catch (error) {
+    res.status(500).json({ error: 'Erro ao excluir tarefa.' });
   }
 };

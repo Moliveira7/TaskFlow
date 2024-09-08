@@ -1,12 +1,16 @@
-import express from 'express';
-import { createTask, getTasks, updateTask, deleteTask } from '../controllers/taskController.js';
-import { authenticateJWT } from '../middleware/authMiddleware.js';
+import { Router } from 'express';
+import {
+  createTaskController,
+  getTasksByUserController,
+  updateTaskController,
+  deleteTaskController
+} from '../controllers/taskController.js';
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', authenticateJWT, createTask);
-router.get('/', authenticateJWT, getTasks);
-router.put('/:id', authenticateJWT, updateTask);
-router.delete('/:id', authenticateJWT, deleteTask);
+router.post('/tasks', createTaskController);
+router.get('/tasks/:user_email', getTasksByUserController);  // Verifique esta linha
+router.put('/tasks/:id', updateTaskController);
+router.delete('/tasks/:id', deleteTaskController);
 
 export default router;
